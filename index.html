@@ -323,7 +323,7 @@ section:nth-child(odd){background:var(--bg)}
 .scroll-cue{display:flex;flex-direction:column;align-items:flex-start;gap:.45rem;color:var(--text-faint);font-size:.78rem}
 
 /* Hero interactive background */
-#hero-canvas{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:.55}
+#hero-canvas{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:.85}
 .hero-glow{
   position:absolute;top:0;left:0;
   width:680px;height:680px;border-radius:50%;
@@ -1334,7 +1334,7 @@ if (heroCanvas && !reduced) {
         const dx = nodes[i].x - nodes[j].x, dy = nodes[i].y - nodes[j].y;
         const d  = Math.hypot(dx, dy);
         if (d < MAXD) {
-          nc.strokeStyle = `rgba(196,148,26,${(1-d/MAXD)*0.22})`;
+          nc.strokeStyle = `rgba(196,148,26,${(1-d/MAXD)*0.38})`;
           nc.beginPath(); nc.moveTo(nodes[i].x, nodes[i].y); nc.lineTo(nodes[j].x, nodes[j].y); nc.stroke();
         }
       }
@@ -1344,7 +1344,7 @@ if (heroCanvas && !reduced) {
     nodes.forEach(n => {
       const dm    = Math.hypot(n.x - mx, n.y - my);
       const boost = dm < 140 ? (140-dm)/140*0.45 : 0;
-      nc.fillStyle = `rgba(196,148,26,${0.4 + boost})`;
+      nc.fillStyle = `rgba(196,148,26,${0.6 + boost})`;
       nc.beginPath(); nc.arc(n.x, n.y, n.r, 0, Math.PI*2); nc.fill();
 
       if (n.hub) {
