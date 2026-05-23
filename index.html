@@ -21,7 +21,7 @@
   --ease-in-out:cubic-bezier(0.77,0,0.175,1);
 }
 
-html{scroll-behavior:smooth}
+html{scroll-behavior:auto}
 body{background:var(--bg);color:var(--text);font-family:var(--f);line-height:1.7;overflow-x:hidden}
 
 /* ── GRAIN ── */
@@ -1097,10 +1097,10 @@ window.addEventListener('scroll', () => {
 ═══════════════════════════════════════════════════════ */
 const secs = Array.from(document.querySelectorAll('section[data-s]'));
 const snav = document.getElementById('snav');
-secs.forEach(s => {
+secs.forEach((s,i) => {
   const d = document.createElement('div');
   d.className='sn'; d.title=`بخش ${s.dataset.s}`;
-  d.onclick = () => s.scrollIntoView({behavior:'smooth'});
+  d.onclick = () => snapTo(i);
   snav.appendChild(d);
 });
 function updNav() {
@@ -1111,6 +1111,71 @@ function updNav() {
   });
 }
 window.addEventListener('scroll', updNav, {passive:true}); updNav();
+
+/* ═══════════════════════════════════════════════════════
+   SNAP SCROLL — wheel/touch/keyboard all snap to sections
+═══════════════════════════════════════════════════════ */
+let snapIdx = 0;
+let snapLocked = false;
+
+// Quartic ease-out: blazing fast start, feathered landing
+function snapEase(t) { return 1 - Math.pow(1 - t, 4); }
+
+function snapTo(idx) {
+  idx = Math.max(0, Math.min(secs.length - 1, idx));
+  if (snapLocked) return;
+
+  snapIdx = idx;
+  snapLocked = true;
+
+  const from = window.scrollY;
+  const to   = secs[idx].offsetTop;
+  const dist = to - from;
+  const DUR  = 820; // ms
+  const t0   = performance.now();
+
+  (function tick(now) {
+    const p = Math.min((now - t0) / DUR, 1);
+    window.scrollTo(0, from + dist * snapEase(p));
+    if (p < 1) {
+      requestAnimationFrame(tick);
+    } else {
+      // unlock after a short guard to absorb trackpad momentum
+      setTimeout(() => { snapLocked = false; }, 220);
+    }
+  })(performance.now());
+}
+
+// Wheel — single direction commit per gesture
+let wheelAcc = 0, wheelFlush;
+window.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (snapLocked) return;
+  wheelAcc += e.deltaY;
+  clearTimeout(wheelFlush);
+  wheelFlush = setTimeout(() => {
+    if (Math.abs(wheelAcc) > 0) {
+      snapTo(snapIdx + (wheelAcc > 0 ? 1 : -1));
+    }
+    wheelAcc = 0;
+  }, 60);
+}, { passive: false });
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  if (['ArrowDown','PageDown',' '].includes(e.key)) { e.preventDefault(); snapTo(snapIdx + 1); }
+  if (['ArrowUp','PageUp'].includes(e.key))          { e.preventDefault(); snapTo(snapIdx - 1); }
+  if (e.key === 'Home') { e.preventDefault(); snapTo(0); }
+  if (e.key === 'End')  { e.preventDefault(); snapTo(secs.length - 1); }
+});
+
+// Touch swipe
+let tY0 = 0;
+window.addEventListener('touchstart', e => { tY0 = e.touches[0].clientY; }, { passive: true });
+window.addEventListener('touchend',   e => {
+  const dy = tY0 - e.changedTouches[0].clientY;
+  if (Math.abs(dy) > 45) snapTo(snapIdx + (dy > 0 ? 1 : -1));
+}, { passive: true });
 
 /* ═══════════════════════════════════════════════════════
    HERO — word-by-word blur reveal
