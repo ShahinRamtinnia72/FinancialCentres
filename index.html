@@ -323,15 +323,7 @@ section:nth-child(odd){background:var(--bg)}
 .scroll-cue{display:flex;flex-direction:column;align-items:flex-start;gap:.45rem;color:var(--text-faint);font-size:.78rem}
 
 /* Hero interactive background */
-.hero-grid{
-  position:absolute;inset:-8%;
-  background-image:radial-gradient(circle,rgba(196,148,26,.11) 1px,transparent 1px);
-  background-size:44px 44px;
-  pointer-events:none;z-index:0;
-  will-change:transform;
-  mask-image:radial-gradient(ellipse 90% 90% at 50% 50%,black 15%,transparent 72%);
-  -webkit-mask-image:radial-gradient(ellipse 90% 90% at 50% 50%,black 15%,transparent 72%);
-}
+#hero-canvas{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:.55}
 .hero-glow{
   position:absolute;top:0;left:0;
   width:680px;height:680px;border-radius:50%;
@@ -339,10 +331,11 @@ section:nth-child(odd){background:var(--bg)}
   pointer-events:none;z-index:0;
   will-change:transform;
 }
+@keyframes arr-bob{0%,100%{transform:rotate(45deg) translate(0,0);opacity:.45}50%{transform:rotate(45deg) translate(3px,5px);opacity:.9}}
 .s-arrow{
-  width:20px;height:20px;
+  width:18px;height:18px;
   border-right:1.5px solid var(--gold);border-bottom:1.5px solid var(--gold);
-  transform:rotate(45deg);animation:bd3 1.8s ease-in-out infinite;
+  animation:arr-bob 1.8s ease-in-out infinite;
 }
 
 /* Hero geo wrap — parallax handled by JS on this wrapper */
@@ -638,7 +631,7 @@ footer{text-align:center;padding:3rem 1rem;border-top:1px solid var(--border-dim
 
 <!-- ════════ S1: HERO ════════ -->
 <section id="s1" data-s="۱">
-  <div class="hero-grid" id="hero-grid"></div>
+  <canvas id="hero-canvas"></canvas>
   <div class="hero-glow" id="hero-glow"></div>
   <div class="blobs">
     <div class="b b1"></div>
@@ -1251,9 +1244,8 @@ setTimeout(() => document.getElementById('hs')?.classList.add('in'), 700);
    HERO GEO PARALLAX — scroll + subtle mouse
    (wrap handles parallax; SVG handles CSS rotation)
 ═══════════════════════════════════════════════════════ */
-const geoWrap   = document.getElementById('geo-wrap');
-const heroGrid  = document.getElementById('hero-grid');
-const heroGlow  = document.getElementById('hero-glow');
+const geoWrap  = document.getElementById('geo-wrap');
+const heroGlow = document.getElementById('hero-glow');
 let gx=0, gy=0, gscroll=0;
 let tgx=0, tgy=0;
 let cx=innerWidth/2, cy=innerHeight/2; // lerped raw cursor
@@ -1279,15 +1271,101 @@ if (!reduced) {
     cx += (tcx - cx) * 0.045;
     cy += (tcy - cy) * 0.045;
 
-    // dot grid shifts opposite direction → feels like it's behind content
-    if (heroGrid) heroGrid.style.transform = `translate(${-gx * 0.55}px,${-gy * 0.55}px)`;
-
     // glow follows cursor
     if (heroGlow) heroGlow.style.transform = `translate(${cx - 340}px,${cy - 340}px)`;
 
     requestAnimationFrame(updateHeroFx);
   }
   updateHeroFx();
+}
+
+/* ═══════════════════════════════════════════════════════
+   HERO CANVAS — network graph
+═══════════════════════════════════════════════════════ */
+const heroCanvas = document.getElementById('hero-canvas');
+if (heroCanvas && !reduced) {
+  const nc = heroCanvas.getContext('2d');
+  const N = 38, MAXD = 155, HUBS = 5;
+  let nodes = [], CW = 0, CH = 0;
+
+  function ncResize() {
+    CW = heroCanvas.offsetWidth;
+    CH = heroCanvas.offsetHeight;
+    heroCanvas.width  = CW;
+    heroCanvas.height = CH;
+  }
+
+  function mkNodes() {
+    nodes = Array.from({length: N}, (_, i) => ({
+      x:  CW * 0.05 + Math.random() * CW * 0.9,
+      y:  CH * 0.05 + Math.random() * CH * 0.9,
+      vx: (Math.random() - 0.5) * 0.22,
+      vy: (Math.random() - 0.5) * 0.22,
+      r:  i < HUBS ? Math.random() * 2.5 + 5.5 : Math.random() * 1.5 + 1.5,
+      hub: i < HUBS,
+      ph: Math.random() * Math.PI * 2,
+    }));
+  }
+
+  function drawNet() {
+    nc.clearRect(0, 0, CW, CH);
+    const t  = performance.now() * 0.001;
+    const mx = tcx, my = tcy; // raw cursor from outer scope
+
+    // update positions
+    nodes.forEach(n => {
+      const dx = n.x - mx, dy = n.y - my;
+      const d  = Math.hypot(dx, dy);
+      if (d < 160 && d > 0) { const f = (160-d)/160*0.28; n.x += dx/d*f; n.y += dy/d*f; }
+      n.x += n.vx; n.y += n.vy;
+      if (n.x < 20)      n.vx += 0.015;
+      if (n.x > CW - 20) n.vx -= 0.015;
+      if (n.y < 20)      n.vy += 0.015;
+      if (n.y > CH - 20) n.vy -= 0.015;
+      n.vx *= 0.996; n.vy *= 0.996;
+      const sp = Math.hypot(n.vx, n.vy);
+      if (sp > 0.35) { n.vx = n.vx/sp*0.35; n.vy = n.vy/sp*0.35; }
+    });
+
+    // draw lines
+    nc.lineWidth = 0.7;
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i+1; j < nodes.length; j++) {
+        const dx = nodes[i].x - nodes[j].x, dy = nodes[i].y - nodes[j].y;
+        const d  = Math.hypot(dx, dy);
+        if (d < MAXD) {
+          nc.strokeStyle = `rgba(196,148,26,${(1-d/MAXD)*0.22})`;
+          nc.beginPath(); nc.moveTo(nodes[i].x, nodes[i].y); nc.lineTo(nodes[j].x, nodes[j].y); nc.stroke();
+        }
+      }
+    }
+
+    // draw nodes
+    nodes.forEach(n => {
+      const dm    = Math.hypot(n.x - mx, n.y - my);
+      const boost = dm < 140 ? (140-dm)/140*0.45 : 0;
+      nc.fillStyle = `rgba(196,148,26,${0.4 + boost})`;
+      nc.beginPath(); nc.arc(n.x, n.y, n.r, 0, Math.PI*2); nc.fill();
+
+      if (n.hub) {
+        const pulse = Math.sin(t*1.3 + n.ph);
+        const rr    = n.r * 3.2 + pulse * 1.8;
+        nc.strokeStyle = `rgba(196,148,26,${0.1 + pulse*0.04})`;
+        nc.lineWidth = 0.8;
+        nc.beginPath(); nc.arc(n.x, n.y, rr, 0, Math.PI*2); nc.stroke();
+        nc.setLineDash([3, 8]);
+        nc.strokeStyle = `rgba(196,148,26,0.055)`;
+        nc.beginPath(); nc.arc(n.x, n.y, rr*1.7, 0, Math.PI*2); nc.stroke();
+        nc.setLineDash([]);
+      }
+    });
+
+    requestAnimationFrame(drawNet);
+  }
+
+  ncResize(); mkNodes();
+  window.addEventListener('resize', () => { ncResize(); mkNodes(); });
+  drawNet();
 }
 
 /* ═══════════════════════════════════════════════════════
