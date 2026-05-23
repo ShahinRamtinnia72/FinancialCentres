@@ -304,8 +304,8 @@ section:nth-child(odd){background:var(--bg)}
 #s1{min-height:100vh;display:flex;align-items:center;background:var(--bg)}
 
 .hero-kicker{
-  font-size:.78rem;font-weight:600;letter-spacing:.2em;text-transform:uppercase;
-  color:var(--gold-lt);margin-bottom:1.6rem;display:block;opacity:.8;
+  font-size:1rem;font-weight:600;letter-spacing:.06em;
+  color:var(--gold-lt);margin-bottom:1.6rem;display:block;opacity:1;
 }
 /* Hero title word spans — injected by JS */
 .hw{
@@ -321,6 +321,24 @@ section:nth-child(odd){background:var(--bg)}
   font-size:.88rem;color:var(--gold-lt);margin-bottom:3.5rem;
 }
 .scroll-cue{display:flex;flex-direction:column;align-items:flex-start;gap:.45rem;color:var(--text-faint);font-size:.78rem}
+
+/* Hero interactive background */
+.hero-grid{
+  position:absolute;inset:-8%;
+  background-image:radial-gradient(circle,rgba(196,148,26,.11) 1px,transparent 1px);
+  background-size:44px 44px;
+  pointer-events:none;z-index:0;
+  will-change:transform;
+  mask-image:radial-gradient(ellipse 90% 90% at 50% 50%,black 15%,transparent 72%);
+  -webkit-mask-image:radial-gradient(ellipse 90% 90% at 50% 50%,black 15%,transparent 72%);
+}
+.hero-glow{
+  position:absolute;top:0;left:0;
+  width:680px;height:680px;border-radius:50%;
+  background:radial-gradient(circle,rgba(196,148,26,.07) 0%,transparent 62%);
+  pointer-events:none;z-index:0;
+  will-change:transform;
+}
 .s-arrow{
   width:20px;height:20px;
   border-right:1.5px solid var(--gold);border-bottom:1.5px solid var(--gold);
@@ -620,6 +638,8 @@ footer{text-align:center;padding:3rem 1rem;border-top:1px solid var(--border-dim
 
 <!-- ════════ S1: HERO ════════ -->
 <section id="s1" data-s="۱">
+  <div class="hero-grid" id="hero-grid"></div>
+  <div class="hero-glow" id="hero-glow"></div>
   <div class="blobs">
     <div class="b b1"></div>
     <div class="b b2"></div>
@@ -653,7 +673,7 @@ footer{text-align:center;padding:3rem 1rem;border-top:1px solid var(--border-dim
   </div>
 
   <div class="inner">
-    <span class="hero-kicker fade" id="hk">بورس اوراق بهادار تهران · نقشه راه تحول ۱۴۰۳</span>
+    <span class="hero-kicker fade" id="hk">بورس تهران — نقشه راه تحول تالارهای منطقه‌ای</span>
     <!-- JS splits this into .hw spans for word-by-word reveal -->
     <h1 class="hero-h1" id="h-title" style="font-size:clamp(2.6rem,7.5vw,5.8rem);margin-bottom:1.4rem">
       از مرکز هزینه<br>
@@ -1200,7 +1220,17 @@ function initHeroReveal() {
       });
       node.parentNode.replaceChild(frag, node);
     } else if (node.nodeType === 1 && node.nodeName !== 'BR') {
-      Array.from(node.childNodes).forEach(child => wrapWords(child, counter));
+      if (node.classList && node.classList.contains('g-gold')) {
+        // Treat entire gradient-text element as one animated unit so bg-clip:text still works
+        const sp = document.createElement('span');
+        sp.className = 'hw';
+        sp.style.animationDelay = `${counter.v * 90 + 200}ms`;
+        node.parentNode.insertBefore(sp, node);
+        sp.appendChild(node);
+        counter.v++;
+      } else {
+        Array.from(node.childNodes).forEach(child => wrapWords(child, counter));
+      }
     }
   }
   const counter = {v: 0};
@@ -1221,26 +1251,43 @@ setTimeout(() => document.getElementById('hs')?.classList.add('in'), 700);
    HERO GEO PARALLAX — scroll + subtle mouse
    (wrap handles parallax; SVG handles CSS rotation)
 ═══════════════════════════════════════════════════════ */
-const geoWrap = document.getElementById('geo-wrap');
+const geoWrap   = document.getElementById('geo-wrap');
+const heroGrid  = document.getElementById('hero-grid');
+const heroGlow  = document.getElementById('hero-glow');
 let gx=0, gy=0, gscroll=0;
 let tgx=0, tgy=0;
+let cx=innerWidth/2, cy=innerHeight/2; // lerped raw cursor
+let tcx=innerWidth/2, tcy=innerHeight/2;
 
 document.addEventListener('mousemove', e => {
-  tgx = (e.clientX/innerWidth - 0.5) * 24;
+  tgx = (e.clientX/innerWidth  - 0.5) * 24;
   tgy = (e.clientY/innerHeight - 0.5) * 16;
+  tcx = e.clientX;
+  tcy = e.clientY;
 }, {passive:true});
 
 window.addEventListener('scroll', () => { gscroll = window.scrollY; }, {passive:true});
 
-if (!reduced && geoWrap) {
-  let rafGeo;
-  function updateGeo() {
-    gx += (tgx - gx) * 0.06; // lerp for smoothness
+if (!reduced) {
+  function updateHeroFx() {
+    // geo parallax
+    gx += (tgx - gx) * 0.06;
     gy += (tgy - gy) * 0.06;
-    geoWrap.style.transform = `translateY(calc(-50% + ${gscroll * 0.18}px)) translate(${gx}px,${gy}px)`;
-    rafGeo = requestAnimationFrame(updateGeo);
+    if (geoWrap) geoWrap.style.transform = `translateY(calc(-50% + ${gscroll * 0.18}px)) translate(${gx}px,${gy}px)`;
+
+    // raw cursor lerp (slightly lazier = depth feeling)
+    cx += (tcx - cx) * 0.045;
+    cy += (tcy - cy) * 0.045;
+
+    // dot grid shifts opposite direction → feels like it's behind content
+    if (heroGrid) heroGrid.style.transform = `translate(${-gx * 0.55}px,${-gy * 0.55}px)`;
+
+    // glow follows cursor
+    if (heroGlow) heroGlow.style.transform = `translate(${cx - 340}px,${cy - 340}px)`;
+
+    requestAnimationFrame(updateHeroFx);
   }
-  updateGeo();
+  updateHeroFx();
 }
 
 /* ═══════════════════════════════════════════════════════
